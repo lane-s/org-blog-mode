@@ -23,6 +23,11 @@
   "Get the filename (not the full path) of the current file"
   (->> (current-buffer) buffer-file-name (s-split "/") -last-item))
 
+(defun org-blog-mode--get-current-path-relative-to-home ()
+  (-let ((home (substitute-in-file-name "$HOME"))
+         (full-path (buffer-file-name (current-buffer))))
+    (s-chop-prefix home full-path)))
+
 (defun org-blog-mode--get-or-create-file-hash ()
   "Get the hash table that maps from filenames to
   fully qualified file paths. If the table is not
@@ -52,7 +57,9 @@
   (-let* ((post (buffer-substring (point-min)
                                   (point-max)))
           (filename (org-blog-mode--get-current-filename))
+          (path-relative-to-home (org-blog-mode--get-current-path-relative-to-home))
           (body (json-encode `(("filename" . ,filename)
+                               ("path_relative_to_home" . ,path-relative-to-home)
                                ("post" . ,post)
                                ("preview" . ,preview)))))
 
