@@ -41,6 +41,14 @@
                                    (message "Post removed")))
            :error org-blog-mode--handle-error))
 
+(defun org-blog-mode--list ()
+  (request (s-concat org-blog-mode-server-url "/posts")
+           :type "GET"
+           :parser 'json-read
+           :success (cl-function (lambda (&key data &allow-other-keys)
+                                   (prin1 data)))
+           :error org-blog-mode--handle-error))
+
 
 ;;;; Org Blog Mode
 (defun org-blog-mode-post-buffer ()
@@ -59,4 +67,8 @@
 (defun org-blog-mode-delete-buffer-post ()
   (interactive)
   (org-blog-mode--delete (org-blog-mode--get-current-filename)))
+
+(defun org-blog-mode-list-posts ()
+  (interactive)
+  (org-blog-mode--list))
 
