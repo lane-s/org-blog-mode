@@ -3,67 +3,96 @@
 (use-package s)
 (use-package request)
 
-(provide 'org-blog-mode)
-
 ;;; Org Blog Mode
 ;;;; Config
-(defvar org-blog-mode-server-url "http://localhost:3000/api"
+(defvar org-blog-server-url "http://localhost:3000/api"
   "The full url of the org-blog server to use")
-(defvar org-blog-mode-local-data-file (substitute-in-file-name "$HOME/.org-blog-mode")
-  "The full file path specifying where to store local data. Default is ~/.org-blog-mode")
+(defvar org-blog-local-data-file (substitute-in-file-name "$HOME/.org-blog")
+  "The full file path specifying where to store local data. Default is ~/.org-blog")
 
 ;;;; Helper
-(defvar org-blog-mode--cached-file-hash nil)
+(defvar org-blog--cached-file-hash nil)
 
-(defvar org-blog-mode--handle-error
+(defvar org-blog--handle-error
   (cl-function (lambda (&rest args &key error-thrown &allow-other-keys)
                  (message "An error occurred: %S" error-thrown))))
 
-(defun org-blog-mode--get-current-filename ()
+(defun org-blog--get-current-filename ()
   "Get the filename (not the full path) of the current file"
   (->> (current-buffer) buffer-file-name (s-split "/") -last-item))
 
-(defun org-blog-mode--get-current-path-relative-to-home ()
+(defun org-blog--get-current-path-relative-to-home ()
   (-let ((home (substitute-in-file-name "$HOME"))
          (full-path (buffer-file-name (current-buffer))))
     (s-chop-prefix home full-path)))
 
-(defun org-blog-mode--get-or-create-file-hash ()
+;;;; Faces
+
+(defun org-blog--post-data->display-text (post-data)
+  (-let* ((filename (alist-get 'filename post-data))
+          (timestamps (s-format " ${created_at} ${updated_at}" 'aget post-data))
+          (display-text (s-concat filename timestamps "\n")))
+    (put-text-property 0 (length filename)
+                       'font-lock-face 'font-lock-function-name-face display-text)
+    (put-text-property (length filename) (length display-text)
+                       'font-lock-face 'font-lock-constant-face display-text)
+    display-text))
+
+
+(defun org-blog--get-header-line ()
+  (-let* ((header-begin "Viewing posts from ")
+          (server-url org-blog-server-url)
+          (header (s-concat header-begin server-url)))
+    (put-text-property 0 (length header-begin)
+                       'font-lock-face 'header-line header)
+    (put-text-property (length header-begin) (length header)
+                       'font-lock-face 'font-lock-constant-face header)
+    header))
+
+(defun org-blog--get-label-line ()
+  (-let [labels "filename created_at updated_at\n"]
+    (put-text-property 0 (length labels)
+                       'font-lock-face 'font-lock-keyword-face labels)
+    labels))
+
+;;;; Rest Client
+
+(defun org-blog--get-or-create-file-hash ()
   "Get the hash table that maps from filenames to
   fully qualified file paths. If the table is not
   cached, then cache it"
-  (unless org-blog-mode--cached-file-hash
-    (setq org-blog-mode--cached-file-hash
-          (with-current-buffer (find-file org-blog-mode-local-data-file)
+  (unless org-blog--cached-file-hash
+    (setq org-blog--cached-file-hash
+          (with-current-buffer (find-file org-blog-local-data-file)
             (-let [hash-from-file (ignore-errors
                                     (read (buffer-substring (point-min) (point-max))))]
               (kill-buffer (current-buffer))
               (or hash-from-file (make-hash-table :test 'equal))))))
-  org-blog-mode--cached-file-hash)
+  org-blog--cached-file-hash)
 
-(defun org-blog-mode--update-file-hash (filename fullpath)
+(defun org-blog--update-file-hash (filename fullpath)
   "Update the hash table so that `filename' maps to `fullpath'"
-  (-let [file-map (org-blog-mode--get-or-create-file-hash)]
+  (-let [file-map (org-blog--get-or-create-file-hash)]
     (puthash filename fullpath file-map)
-    (setq org-blog-mode--cached-file-hash file-map)
-    (with-current-buffer (find-file org-blog-mode-local-data-file)
+    (setq org-blog--cached-file-hash file-map)
+    (with-current-buffer (find-file org-blog-local-data-file)
       (erase-buffer)
       (goto-char (point-min))
       (insert (prin1-to-string file-map))
       (save-buffer)
       (kill-buffer (current-buffer)))))
 
-(defun org-blog-mode--post (preview)
+(defun org-blog--post (preview)
   (-let* ((post (buffer-substring (point-min)
                                   (point-max)))
-          (filename (org-blog-mode--get-current-filename))
-          (path-relative-to-home (org-blog-mode--get-current-path-relative-to-home))
+          (filename (org-blog--get-current-filename))
+          (path-relative-to-home (org-blog--get-current-path-relative-to-home))
           (body (json-encode `(("filename" . ,filename)
                                ("path_relative_to_home" . ,path-relative-to-home)
                                ("post" . ,post)
                                ("preview" . ,preview)))))
 
-    (request (s-concat org-blog-mode-server-url "/post")
+    (request (s-concat org-blog-server-url "/post")
              :type "POST"
              :data body
              :headers '(("Content-Type" . "application/json"))
@@ -73,48 +102,87 @@
                                        (message "Post successful")))
                         (cl-function (lambda (&key data &allow-other-keys)
                                        (message "Post sent for preview"))))
-             :error org-blog-mode--handle-error)
+             :error org-blog--handle-error)
 
     (when (string= preview "false")
-      (org-blog-mode--update-file-hash
+      (org-blog--update-file-hash
        filename (buffer-file-name (current-buffer))))))
 
-(defun org-blog-mode--delete (filename)
-  (request (s-concat org-blog-mode-server-url "/post/" filename)
+(defun org-blog--delete (filename)
+  (request (s-concat org-blog-server-url "/post/" filename)
            :type "DELETE"
            :parser 'json-read
            :success (cl-function (lambda (&key data &allow-other-keys)
                                    (message "Post removed")))
-           :error org-blog-mode--handle-error))
+           :error org-blog--handle-error))
 
-(defun org-blog-mode--list ()
-  (request (s-concat org-blog-mode-server-url "/posts")
+(defun org-blog--list (success-callback)
+  (request (s-concat org-blog-server-url "/posts")
            :type "GET"
            :parser 'json-read
-           :success (cl-function (lambda (&key data &allow-other-keys)
-                                   (prin1 data)))
-           :error org-blog-mode--handle-error))
-
+           :success success-callback
+           :error org-blog--handle-error))
 
 ;;;; Org Blog Mode
-(defun org-blog-mode-post-buffer ()
-  "Post the contents of the current buffer
-  to the server at `org-blog-mode-server-url`"
+(defun org-blog--hide-cursor ()
+  (setq-local cursor-type nil)
+  (hl-line-mode t))
+(define-derived-mode org-blog-mode special-mode "Org Blog"
+  "Major mode for managing an org-blog server"
+  (org-blog--hide-cursor))
+
+(defun org-blog ()
+  "Open an org-blog buffer for managing posts on an org-blog server"
   (interactive)
-  (org-blog-mode--post "false"))
-(defun org-blog-mode-preview-buffer ()
+  (switch-to-buffer (get-buffer-create "*org-blog*"))
+  (setq-local buffer-read-only t)
+  (org-blog-mode)
+  (org-blog-refresh)
+  (with-eval-after-load "evil"
+    (org-blog--hide-cursor)))
+
+(defun org-blog-refresh ()
+  "Refresh the org-blog buffer"
+  (interactive)
+  (org-blog--list
+   (cl-function (lambda (&key data &allow-other-keys)
+                  (with-current-buffer (get-buffer-create "*org-blog*")
+                    (setq-local posts-cache data)
+                    (-let [buffer-read-only nil]
+                      (save-excursion
+                        (setq header-line-format (org-blog--get-header-line))
+                        (erase-buffer)
+                        (goto-char (point-min))
+                        (insert (org-blog--get-label-line))
+                        (-let [list-text (->> data
+                                              (-map 'org-blog--post-data->display-text)
+                                              (s-join ""))]
+                          (insert list-text))
+                        (goto-char (point-min))
+                        (align-regexp (point) (point-max)
+                                      "\\(\\s-*\\)\\s-" 1 5 t)))
+                    (org-blog--hide-cursor))))))
+
+
+(defun org-blog-post-buffer ()
+  "Post the contents of the current buffer
+  to the server at `org-blog-server-url`"
+  (interactive)
+  (org-blog--post "false"))
+(defun org-blog-preview-buffer ()
   "Sends the contents of the current buffer
    to the org-blog server which will then
    emit an event which the frontend should
    listen for to render a preview"
   (interactive)
-  (org-blog-mode--post "true"))
+  (org-blog--post "true"))
 
-(defun org-blog-mode-delete-buffer-post ()
+(defun org-blog-delete-buffer-post ()
   (interactive)
-  (org-blog-mode--delete (org-blog-mode--get-current-filename)))
+  (org-blog--delete (org-blog--get-current-filename)))
 
-(defun org-blog-mode-list-posts ()
+(defun org-blog-list-posts ()
   (interactive)
-  (org-blog-mode--list))
+  (org-blog--list))
 
+(provide 'org-blog)
