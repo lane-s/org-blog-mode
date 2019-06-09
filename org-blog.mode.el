@@ -11,11 +11,17 @@
   "The full file path specifying where to store local data. Default is ~/.org-blog")
 
 ;;;; Helper
-(defvar org-blog--cached-file-hash nil)
+(setq org-blog--cached-file-hash nil)
 
-(defvar org-blog--handle-error
+(setq org-blog--handle-error
   (cl-function (lambda (&rest args &key error-thrown &allow-other-keys)
                  (message "An error occurred: %S" error-thrown))))
+
+(setq org-blog--sort-comparator
+      (lambda (a b)
+        (string>
+         (alist-get 'updated_at a)
+         (alist-get 'updated_at b))))
 
 (defun org-blog--get-current-filename ()
   "Get the filename (not the full path) of the current file"
@@ -50,7 +56,7 @@
     header))
 
 (defun org-blog--get-label-line ()
-  (-let [labels "filename created_at updated_at\n"]
+  (-let [labels "filename posted_at updated_at\n"]
     (put-text-property 0 (length labels)
                        'font-lock-face 'font-lock-keyword-face labels)
     labels))
@@ -141,28 +147,33 @@
   (with-eval-after-load "evil"
     (org-blog--hide-cursor)))
 
+(defun org-blog--redraw-buffer ()
+ (with-current-buffer (get-buffer-create "*org-blog*")
+   (-let [buffer-read-only nil]
+      (save-excursion
+        (setq header-line-format (org-blog--get-header-line))
+        (erase-buffer)
+        (goto-char (point-min))
+        (insert (org-blog--get-label-line))
+        (-let [list-text (->> posts-cache
+                              (-sort org-blog--sort-comparator)
+                              (-map 'org-blog--post-data->display-text)
+                              (s-join ""))]
+          (insert list-text))
+        (goto-char (point-min))
+        (align-regexp (point) (point-max)
+                      "\\(\\s-*\\)\\s-" 1 5 t)))
+   (org-blog--hide-cursor)))
+
 (defun org-blog-refresh ()
-  "Refresh the org-blog buffer"
+  "Request posts from the server and refresh the org-blog buffer"
   (interactive)
   (org-blog--list
    (cl-function (lambda (&key data &allow-other-keys)
-                  (with-current-buffer (get-buffer-create "*org-blog*")
-                    (setq-local posts-cache data)
-                    (-let [buffer-read-only nil]
-                      (save-excursion
-                        (setq header-line-format (org-blog--get-header-line))
-                        (erase-buffer)
-                        (goto-char (point-min))
-                        (insert (org-blog--get-label-line))
-                        (-let [list-text (->> data
-                                              (-map 'org-blog--post-data->display-text)
-                                              (s-join ""))]
-                          (insert list-text))
-                        (goto-char (point-min))
-                        (align-regexp (point) (point-max)
-                                      "\\(\\s-*\\)\\s-" 1 5 t)))
-                    (org-blog--hide-cursor))))))
+                  (setq-local posts-cache data)
+                  (org-blog--redraw-buffer)))))
 
+(string> "2019-06-09T20:45:10Z" "2019-06-09T23:42:17Z")
 
 (defun org-blog-post-buffer ()
   "Post the contents of the current buffer
