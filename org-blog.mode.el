@@ -206,8 +206,10 @@
 
 (defun org-blog-delete-post-at-point ()
   (interactive)
-  (org-blog--delete (org-blog--get-filename-at-point)
-                    (cl-function (lambda (&key data &allow-other-keys)
-                                   (org-blog-refresh)))))
+  (if (> (line-number-at-pos (point)) 1)
+      (org-blog--delete (org-blog--get-filename-at-point)
+                        (cl-function (lambda (&key data &allow-other-keys)
+                                       (org-blog-refresh))))
+    (message "No post is highlighted")))
 
 (provide 'org-blog)
