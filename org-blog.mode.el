@@ -32,6 +32,11 @@
          (full-path (buffer-file-name (current-buffer))))
     (s-chop-prefix home full-path)))
 
+(defun org-blog--get-filename-at-point ()
+  (->> (buffer-substring (line-beginning-position) (line-end-position))
+       (s-split " ")
+       -first-item))
+
 ;;;; Faces
 
 (defun org-blog--post-data->display-text (post-data)
@@ -114,12 +119,11 @@
       (org-blog--update-file-hash
        filename (buffer-file-name (current-buffer))))))
 
-(defun org-blog--delete (filename)
+(defun org-blog--delete (filename success-callback)
   (request (s-concat org-blog-server-url "/post/" filename)
            :type "DELETE"
            :parser 'json-read
-           :success (cl-function (lambda (&key data &allow-other-keys)
-                                   (message "Post removed")))
+           :success success-callback
            :error org-blog--handle-error))
 
 (defun org-blog--list (success-callback)
@@ -133,9 +137,12 @@
 (defun org-blog--hide-cursor ()
   (setq-local cursor-type nil)
   (hl-line-mode t))
+
 (define-derived-mode org-blog-mode special-mode "Org Blog"
   "Major mode for managing an org-blog server"
   (org-blog--hide-cursor))
+
+(define-key org-blog-mode-map (kbd "D") 'org-blog-delete-post-at-point)
 
 (defun org-blog ()
   "Open an org-blog buffer for managing posts on an org-blog server"
@@ -149,20 +156,24 @@
 
 (defun org-blog--redraw-buffer ()
  (with-current-buffer (get-buffer-create "*org-blog*")
-   (-let [buffer-read-only nil]
-      (save-excursion
-        (setq header-line-format (org-blog--get-header-line))
-        (erase-buffer)
-        (goto-char (point-min))
-        (insert (org-blog--get-label-line))
-        (-let [list-text (->> posts-cache
-                              (-sort org-blog--sort-comparator)
-                              (-map 'org-blog--post-data->display-text)
-                              (s-join ""))]
-          (insert list-text))
-        (goto-char (point-min))
-        (align-regexp (point) (point-max)
-                      "\\(\\s-*\\)\\s-" 1 5 t)))
+   (setq-local line-before-redraw (line-number-at-pos (point)))
+   (-let ((buffer-read-only nil)
+          (line-before-redraw (line-number-at-pos (point))))
+     (save-excursion
+       (setq header-line-format (org-blog--get-header-line))
+       (erase-buffer)
+       (goto-char (point-min))
+       (insert (org-blog--get-label-line))
+       (-let [list-text (->> posts-cache
+                             (-sort org-blog--sort-comparator)
+                             (-map 'org-blog--post-data->display-text)
+                             (s-join ""))]
+         (insert list-text))
+       (goto-char (point-min))
+       (align-regexp (point) (point-max)
+                     "\\(\\s-*\\)\\s-" 1 5 t))
+     (forward-line (1- (min line-before-redraw
+                           (1- (line-number-at-pos (point-max)))))))
    (org-blog--hide-cursor)))
 
 (defun org-blog-refresh ()
@@ -173,13 +184,12 @@
                   (setq-local posts-cache data)
                   (org-blog--redraw-buffer)))))
 
-(string> "2019-06-09T20:45:10Z" "2019-06-09T23:42:17Z")
-
 (defun org-blog-post-buffer ()
   "Post the contents of the current buffer
   to the server at `org-blog-server-url`"
   (interactive)
   (org-blog--post "false"))
+
 (defun org-blog-preview-buffer ()
   "Sends the contents of the current buffer
    to the org-blog server which will then
@@ -190,10 +200,14 @@
 
 (defun org-blog-delete-buffer-post ()
   (interactive)
-  (org-blog--delete (org-blog--get-current-filename)))
+  (org-blog--delete (org-blog--get-current-filename)
+                    (cl-function (lambda (&key data &allow-other-keys)
+                                   (message "Post removed")))))
 
-(defun org-blog-list-posts ()
+(defun org-blog-delete-post-at-point ()
   (interactive)
-  (org-blog--list))
+  (org-blog--delete (org-blog--get-filename-at-point)
+                    (cl-function (lambda (&key data &allow-other-keys)
+                                   (org-blog-refresh)))))
 
 (provide 'org-blog)
