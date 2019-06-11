@@ -1,0 +1,5 @@
+#+TITLE: org-blog-mode
+#+AUTHOR: Lane Spangler
+#+EMAIL: las4vc@virginia.edu
+
+* 
