@@ -4,4 +4,44 @@
 
 [[http://www.gnu.org/licenses/gpl-3.0.txt][https://img.shields.io/badge/License-GPL%20v3-blue.svg]]
 
-* 
+org-blog-mode is an emacs client for [[https://github.com/lane-s/org-blog][org-blog]]
+
+It's one part of a larger system that allows you to blog directly from org-mode! It also defines a new major mode for managing blog posts.
+
+* Installation
+
+The package is not currently on MELPA. I'll submit a recipe if more people become interested.
+
+For now, just clone the repo and load org-blog-mode.el
+
+If you're using spacemacs, add the following to your ~dotspacemacs-additional-packages~
+#+BEGIN_SRC emacs-lisp
+(org-blog 
+:location (recipe 
+           :fetcher github
+           :repo "lane-s/org-blog-mode"))
+#+END_SRC
+
+* New commands to be used in org-mode
+
+| command                     | description                                                      |
+|-----------------------------+------------------------------------------------------------------|
+| org-blog-post-buffer        | Sends the current buffer contents to the org-blog server         |
+| org-blog-preview-buffer     | Sends the current buffer contents for previewing on the frontend |
+| org-blog-delete-buffer-post | Attempt to delete the currently visited post from the server     |
+| org-blog                    | Open the org-blog buffer for managing posts                      |
+
+* org-blog-mode commands
+
+| command                       | description                                                                               | default binding |
+|-------------------------------+-------------------------------------------------------------------------------------------+-----------------|
+| org-blog-delete-post-at-point | Request to delete the post on the current line from the server                            | D               |
+| org-blog-open-post-at-point   | Open the post on the current line. If it does not exist locally, pull it from the server. | RET             |
+
+* Configuration variables
+
+| name                     | description                                                |
+|--------------------------+------------------------------------------------------------|
+| org-blog-server-url      | The url of the org-blog server to use                      |
+| org-blog-local-data-file | The file to use as a local cache (defaults to ~/.org-blog) |
+
