@@ -1,13 +1,12 @@
 ;; -*- lexical-binding: t -*-
 (use-package dash)
-(use-package dash-functional :after dash)
 (use-package s)
 (use-package request)
 
 ;;; Org Blog Mode
 ;;;; Config
 (defvar org-blog-server-url "http://localhost:3000/api"
-  "The full url of the org-blog server to use")
+   "The full url of the org-blog server to use")
 (defvar org-blog-local-data-file (substitute-in-file-name "$HOME/.org-blog")
   "The full file path specifying where to store local data. Default is ~/.org-blog")
 
