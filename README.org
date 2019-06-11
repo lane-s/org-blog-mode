@@ -2,4 +2,6 @@
 #+AUTHOR: Lane Spangler
 #+EMAIL: las4vc@virginia.edu
 
+[[http://www.gnu.org/licenses/gpl-3.0.txt][https://img.shields.io/badge/License-GPL%20v3-blue.svg]]
+
 * 
