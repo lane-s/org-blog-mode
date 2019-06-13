@@ -5,8 +5,8 @@
 
 ;;; Org Blog Mode
 ;;;; Config
-(defvar org-blog-server-url "http://localhost:3000/api"
-   "The full url of the org-blog server to use")
+(defvar org-blog-server-url "http://localhost:3000"
+  "The full url of the org-blog server to use")
 (defvar org-blog-local-data-file (substitute-in-file-name "$HOME/.org-blog")
   "The full file path specifying where to store local data. Default is ~/.org-blog")
 
@@ -100,14 +100,12 @@
           (path-relative-to-home (org-blog--get-current-path-relative-to-home))
           (body (json-encode `(("filename" . ,filename)
                                ("path_relative_to_home" . ,path-relative-to-home)
-                               ("post" . ,post)
-                               ("preview" . ,preview)))))
+                               ("post" . ,post)))))
 
-    (request (s-concat org-blog-server-url "/post")
+    (request (s-concat org-blog-server-url "/post?preview=" preview)
              :type "POST"
              :data body
              :headers '(("Content-Type" . "application/json"))
-             :parser 'json-read
              :success (if (string= preview "false")
                         (cl-function (lambda (&key data &allow-other-keys)
                                        (message "Post successful")))
@@ -122,7 +120,6 @@
 (defun org-blog--delete (filename success-callback)
   (request (s-concat org-blog-server-url "/post/" filename)
            :type "DELETE"
-           :parser 'json-read
            :success success-callback
            :error org-blog--handle-error))
 
@@ -134,7 +131,7 @@
            :error org-blog--handle-error))
 
 (defun org-blog--get-raw-post (filename success-callback)
-  (request (s-concat org-blog-server-url "/post/" filename "?raw=1")
+  (request (s-concat org-blog-server-url "/post/" filename "?raw=true")
            :type "GET"
            :parser 'json-read
            :success success-callback
